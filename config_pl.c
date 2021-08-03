@@ -25,7 +25,7 @@ config_tx(int memfd, uint64_t modulador_ba, uint64_t ifft_dma_ba,
 
 void
 config_rx(int memfd, uint64_t sync_word, uint64_t ifft_dma_ba, uint64_t correlator_ba,
-		uint64_t sync_word, uint16_t sync_word_length){
+		uint16_t sync_word_length){
 	void * dma_ifft_rx_base;
 	void * dma_correlator_base;
 

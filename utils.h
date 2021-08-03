@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <bits/stdint-uintn.h>
 
-#define DDR_MAP_SIZE 0x10000000
+#define DDR_MAP_SIZE 0x40000000
 #define DDR_MAP_MASK (DDR_MAP_SIZE - 1)
 
 #define MAP_SIZE 4096UL
