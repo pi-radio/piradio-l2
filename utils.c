@@ -8,6 +8,31 @@
 #include "xaxidma_hw.h"
 #include <sys/mman.h>
 
+header_t
+is_header_valid(uint8_t* buffer){
+	header_t header;
+	memcpy(&header, src, sizeof(header_t));
+	if(header.packet_len > MAX_PACKET_SIZE){
+		return NULL;
+	}
+	if(header.dst_addr != LOCAL_MAC_ADDR)
+		return NULL;
+
+	return header;
+}
+
+int
+depacketize(header_t * header, uint8_t* src, uint8_t* dst){
+	uint16_t crc_pkt = (src[header->packet_len - 2] << 8) | src[header->packet_len - 1];
+	uint16_t crc_calc = calc_crc(src, header->packet_len - 2);
+
+	if(crc_pkt != crc_calc)
+		return -2;
+
+	memcpy(dst, &src[sizeof(header_t)], header->packet_len - HEADER_TAIL_SIZE);
+	return header->packet_len - HEADER_TAIL_SIZE;
+}
+
 void
 write_to_base(void* base, uint32_t value){
 	*((volatile uint32_t*)base) = value;
@@ -125,4 +150,42 @@ reset_pl(int memfd){
 	write_to_base(reset, 0x00000000U);
 	usleep(10);
 	write_to_base(reset, 0x80000000U);
+}
+
+int
+setup_sg_desciptors(void* base, uint32_t bd_base_addr, uint32_t buffer_address, int num_desc){
+	for(int i = 0; i++; i < num_desc){
+		write_to_base(base + i * XAXIDMA_BD_MINIMUM_ALIGNMENT
+				+ XAXIDMA_BD_NDESC_OFFSET, bd_base_addr + (i + 1) * XAXIDMA_BD_MINIMUM_ALIGNMENT);
+		write_to_base(base + i * XAXIDMA_BD_MINIMUM_ALIGNMENT
+				+ XAXIDMA_BD_BUFA_OFFSET, buffer_address + i * BYTES_PER_SYMBOL);
+		write_to_base(base + i * XAXIDMA_BD_MINIMUM_ALIGNMENT
+				+ XAXIDMA_BD_CTRL_LEN_OFFSET, BYTES_PER_SYMBOL);
+		write_to_base(bd_base + i * XAXIDMA_BD_MINIMUM_ALIGNMENT + XAXIDMA_BD_STS_OFFSET, 0);
+	}
+}
+
+int
+setup_sg_dma(void * dma_base, uint32_t bd_head, uint32_t bd_tail){
+	write_to_base(dma_base + XAXIDMA_RX_OFFSET + XAXIDMA_CDESC_OFFSET,
+			bd_head);
+	uint32_t regvalue = read_from_base(dma_base + XAXIDMA_RX_OFFSET + XAXIDMA_CR_OFFSET);
+	regvalue = (uint32_t) (regvalue | XAXIDMA_CR_RUNSTOP_MASK);
+	write_to_base(dma_base + XAXIDMA_RX_OFFSET + XAXIDMA_CR_OFFSET, regvalue);
+	write_to_base(dma_base + XAXIDMA_RX_OFFSET + XAXIDMA_TDESC_OFFSET, bd_tail);
+}
+
+int
+is_bd_complete(void* bd_base, int offset){
+	if(read_from_base(bd_base + offset * XAXIDMA_BD_MINIMUM_ALIGNMENT +
+			XAXIDMA_BD_STS_OFFSET) & XAXIDMA_BD_STS_COMPLETE_MASK)
+		return read_from_base(bd_base + offset * XAXIDMA_BD_MINIMUM_ALIGNMENT +
+				XAXIDMA_BD_STS_OFFSET) & 0x03FFFFFF;
+	else
+		return 0;
+}
+
+int
+reset_bd(void* bd_base, int offset){
+	write_to_base(bd_base + offset * XAXIDMA_BD_MINIMUM_ALIGNMENT + XAXIDMA_BD_STS_OFFSET, 0);
 }
